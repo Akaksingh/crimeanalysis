@@ -1,0 +1,16 @@
+services:
+  app:
+    build: .
+    image: crime-analytics:latest
+    ports:
+      - "8000:8000"
+    environment:
+      # Dev-open by default. To enforce RBAC, set keys and tighten CORS:
+      # CRIME_API_KEYS: "demo-admin:admin,demo-analyst:analyst,demo-viewer:viewer"
+      CRIME_CORS_ORIGINS: "*"
+    volumes:
+      - audit-logs:/app/backend/logs
+    restart: unless-stopped
+
+volumes:
+  audit-logs:

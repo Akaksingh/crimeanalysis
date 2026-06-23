@@ -1,0 +1,25 @@
+{
+  "name": "crime-analytics-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "React (Vite) frontend for the AI-Driven Crime Analytics platform. Phase 1: consumes the district-level aggregate API. Phase 2 adds maps & rich dashboards.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "leaflet": "^1.9.4",
+    "leaflet.heat": "^0.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-force-graph-3d": "^1.29.1",
+    "react-leaflet": "^4.2.1",
+    "three": "^0.184.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.10"
+  }
+}

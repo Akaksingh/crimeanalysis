@@ -1,0 +1,32 @@
+# ---- Python (backend) ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# ---- Node (frontend) ----
+node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+yarn-error.log*
+
+# ---- Data layer ----
+# Raw downloads and generated outputs are NOT committed.
+# Seeds (backend/data/seed) and the manifest ARE committed so the pipeline runs offline.
+backend/data/raw/*
+!backend/data/raw/.gitkeep
+backend/data/processed/*
+!backend/data/processed/.gitkeep
+
+# ---- runtime ----
+backend/logs/
+
+# ---- misc ----
+.DS_Store
+*.local
+.env
