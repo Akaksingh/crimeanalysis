@@ -1,0 +1,92 @@
+{
+  "manifest": "phase1_download_manifest",
+  "version": "0.1.0",
+  "pilot_state": "Karnataka",
+  "description": "Real source files the pipeline ingests, placed under data/raw/. The two marked status='in_use' are already wired and ingested (all 30 districts, reconciled to NCRB totals). The rest enrich later phases (LGD codes, socio-economic, recent years).",
+  "instructions": [
+    "1. The two in_use files are fetched into backend/data/raw/ and ingested by `python -m pipeline.run`.",
+    "2. To refresh/replace, re-download into data/raw/ keeping the same filename.",
+    "3. Check data/processed/data_quality_report.md after every run."
+  ],
+  "fetched_real_sources": {
+    "ncrb_district_ipc_2001_2012.csv": "https://raw.githubusercontent.com/BhanuPratapSunda1/Crime-Data-Analysis/main/01_District_wise_crimes_committed_IPC_2001_2012_.csv (NCRB via data.gov.in, GitHub mirror)",
+    "ncrb_district_ipc_2013.csv": "https://raw.githubusercontent.com/reethified/India-IPC-Crimes-Datasets/master/archived_raw_crimes_by_year/District_wise_crimes_reported_IPC_2013.csv (NCRB district-wise IPC 2013; same 33-column schema, header normalized on ingest). Latest year that reconciles exactly. 2014/2015/2017 use wider sub-split schemas and 2016 omits the state column, so they are not ingested; district-wise IPC is not published machine-readable for 2019+.",
+    "karnataka_districts.geojson": "https://raw.githubusercontent.com/udit-001/india-maps-data/main/geojson/states/karnataka.geojson (Census 2011 district boundaries + dt_code)",
+    "india_districts_census2011.csv": "https://raw.githubusercontent.com/nishusharma1608/India-Census-2011-Analysis/master/india-districts-census-2011.csv (Census 2011 district primary abstract; socio-economic indicators)"
+  },
+  "datasets": [
+    {
+      "id": "ncrb_district_ipc",
+      "source_id": "ogd_district_ipc",
+      "title": "District-wise IPC crimes (NCRB via OGD)",
+      "url": "https://www.data.gov.in/catalog/district-wise-crimes-under-various-sections-indian-penal-code-ipc-crimes",
+      "target_raw": "data/raw/ncrb_district_ipc.csv",
+      "ingest_into": "incident",
+      "filter": "State == 'Karnataka'",
+      "mapping": "wide crime-head columns -> canonical category_code via crime_taxonomy.json ncrb_heads; State/District/Year are keys",
+      "format": "csv",
+      "pii_level": "none",
+      "notes": "District names vary by year; reconcile to geo_units names / aliases."
+    },
+    {
+      "id": "ncrb_cii_state",
+      "source_id": "ncrb_cii_tables",
+      "title": "NCRB Crime in India state/city tables",
+      "url": "https://ncrb.gov.in/crime-in-india-table-content.html",
+      "target_raw": "data/raw/ncrb_cii_karnataka.xlsx",
+      "ingest_into": "incident",
+      "filter": "State == 'Karnataka'",
+      "mapping": "head rows -> category_code; used for state totals & cross-checking district sums",
+      "format": "xlsx/pdf",
+      "pii_level": "none",
+      "notes": "PDF tables may need tabula/camelot extraction."
+    },
+    {
+      "id": "census_2011_ka",
+      "source_id": "census_2011",
+      "title": "Census 2011 district population (Karnataka)",
+      "url": "https://censusindia.gov.in/",
+      "target_raw": "data/raw/census2011_karnataka_districts.csv",
+      "ingest_into": "geo_unit",
+      "mapping": "district population + female_population -> geo_units (rate denominators); census_district_code -> codes.census_district_code",
+      "format": "xlsx/csv",
+      "pii_level": "none",
+      "notes": "Resolves the 'missing LGD/Census code' data-quality warnings and provides real rate denominators."
+    },
+    {
+      "id": "lgd_districts_ka",
+      "source_id": "ogd_ncrb_catalog",
+      "title": "LGD district codes (Karnataka)",
+      "url": "https://lgdirectory.gov.in/",
+      "target_raw": "data/raw/lgd_karnataka_districts.csv",
+      "ingest_into": "geo_unit",
+      "mapping": "lgd_district_code -> geo_units.codes.lgd_district_code; build police<->census crosswalk",
+      "format": "csv",
+      "pii_level": "none"
+    },
+    {
+      "id": "secc_2011_ka",
+      "source_id": "ogd_secc",
+      "title": "Socio-Economic Census (Karnataka)",
+      "url": "https://www.data.gov.in/catalog/socio-economic-census",
+      "target_raw": "data/raw/secc_karnataka.csv",
+      "ingest_into": "geo_unit",
+      "mapping": "socio-economic indicators -> geo_units (feeds risk 'socioeconomic' component, Phase 4)",
+      "format": "csv",
+      "pii_level": "none"
+    },
+    {
+      "id": "karnataka_district_boundaries",
+      "source_id": "datameet_maps",
+      "title": "Karnataka district boundaries (GeoJSON)",
+      "url": "https://github.com/datameet/maps",
+      "target_raw": "data/raw/karnataka_districts.geojson",
+      "ingest_into": "geo_unit",
+      "mapping": "polygon geometry -> geo_units.boundary_ref + centroid + area_km2 (Phase 2 map layer)",
+      "format": "geojson",
+      "pii_level": "low",
+      "license": "CC-BY / ODbL — verify per file",
+      "notes": "Phase 2 needs this for the choropleth/heatmap; Phase 1 uses centroids only."
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+# Phase 1 backend — data pipeline + aggregate API.
+# Versions pinned to what the dev environment already has.
+fastapi==0.119.0
+uvicorn[standard]==0.37.0
+pandas==2.2.3
+numpy==2.1.2
+scikit-learn==1.8.0
+pydantic>=2.0
+
+# Phase 2+ (geospatial maps, seasonal/anomaly stats) — install when those phases start:
+# geopandas
+# shapely
+# statsmodels
