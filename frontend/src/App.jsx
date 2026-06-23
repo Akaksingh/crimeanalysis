@@ -27,37 +27,21 @@ export default function App() {
 
   const select = (id) => api.district(id).then(setSelected).catch((e) => setError(e.message));
 
-  if (error) {
-    return (
-      <div className="wrap">
-        <h1>AI-Driven Crime Analytics</h1>
+  const NAV = [
+    { id: 'overview', label: 'Map & Districts' },
+    { id: 'intelligence', label: 'Crime Intelligence' },
+    { id: 'correlations', label: 'Socio-economic' },
+  ];
+
+  return (
+    <Shell meta={meta} tab={tab} setTab={setTab} nav={NAV}>
+      {error ? (
         <div className="error">
           Could not reach the API ({error}).<br />
           Start the backend: <code>python -m pipeline.run</code> then
           <code>uvicorn app.main:app --reload</code>.
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="wrap">
-      <header>
-        <h1>AI-Driven Crime Analytics <span className="pill">Karnataka</span></h1>
-        {meta && (
-          <p className="sub">
-            {meta.district_count} districts · {meta.years[0]}–{meta.years[meta.years.length - 1]} ·
-            latest {meta.latest_year} · <span className="tag">{meta.data_note}</span>
-          </p>
-        )}
-        <nav className="tabs">
-          <button className={tab === 'overview' ? 'on' : ''} onClick={() => setTab('overview')}>Map & Districts</button>
-          <button className={tab === 'intelligence' ? 'on' : ''} onClick={() => setTab('intelligence')}>Intelligence</button>
-          <button className={tab === 'correlations' ? 'on' : ''} onClick={() => setTab('correlations')}>Socio-economic</button>
-        </nav>
-      </header>
-
-      {tab === 'intelligence' ? (
+      ) : tab === 'intelligence' ? (
         <Intelligence />
       ) : tab === 'correlations' ? (
         <Correlations />
@@ -74,7 +58,153 @@ export default function App() {
           <OverviewCols districts={districts} selected={selected} select={select} />
         </>
       )}
-    </div>
+    </Shell>
+  );
+}
+
+// Government-of-Karnataka / Karnataka State Police chrome: utility bar, tricolor
+// strip, emblem + bilingual title, primary navigation, and an official footer.
+function Shell({ meta, tab, setTab, nav, children }) {
+  const active = nav.find((n) => n.id === tab)?.label ?? '';
+  return (
+    <>
+      <a className="skip-link" href="#main">Skip to main content</a>
+
+      <div className="gov-topbar">
+        <div className="gov-topbar-in">
+          <span className="gov-india">Government of Karnataka · ಕರ್ನಾಟಕ ಸರ್ಕಾರ</span>
+          <div className="gov-top-actions">
+            <button type="button" aria-label="Decrease text size">A-</button>
+            <button type="button" aria-label="Default text size">A</button>
+            <button type="button" aria-label="Increase text size">A+</button>
+            <span className="sep" />
+            <a className="on" href="#" aria-current="true">English</a>
+            <a href="#" lang="kn">ಕನ್ನಡ</a>
+            <span className="sep" />
+            <a href="#">Sign In</a>
+          </div>
+        </div>
+      </div>
+
+      <div className="tricolor" aria-hidden="true" />
+
+      <header className="gov-header">
+        <div className="gov-header-in">
+          <img
+            className="gov-emblem"
+            src="/ksp-logo.svg"
+            alt="Karnataka State Police emblem"
+            width="68"
+            height="68"
+          />
+          <div className="gov-title">
+            <h1>Karnataka State Police</h1>
+            <div className="gov-sub-kn" lang="kn">ಕರ್ನಾಟಕ ರಾಜ್ಯ ಪೊಲೀಸ್</div>
+            <div className="gov-sub-en">Government of Karnataka</div>
+          </div>
+          <div className="gov-portal-badge">
+            <div className="gpb-kicker">Official Portal</div>
+            <div className="gpb-title">Crime Analytics &amp; Intelligence Platform</div>
+            <div className="gpb-sub">Data-driven policing · Pilot: Karnataka</div>
+          </div>
+        </div>
+      </header>
+
+      <nav className="gov-nav" aria-label="Primary">
+        <div className="gov-nav-in">
+          {nav.map((n) => (
+            <button
+              key={n.id}
+              className={tab === n.id ? 'on' : ''}
+              onClick={() => setTab(n.id)}
+              aria-current={tab === n.id ? 'page' : undefined}
+            >
+              {n.label}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      <div className="gov-context">
+        <div className="gov-context-in">
+          <span className="crumb">Home <span className="crumb-sep">›</span> {active}</span>
+          {meta && (
+            <span className="ctx-meta">
+              {meta.district_count} districts · {meta.years[0]}–{meta.years[meta.years.length - 1]} ·
+              latest {meta.latest_year}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <main id="main" className="wrap">
+        {meta && (
+          <div className="data-note">
+            <b>Data note:</b> {meta.data_note}
+          </div>
+        )}
+        {children}
+      </main>
+
+      <GovFooter />
+    </>
+  );
+}
+
+function GovFooter() {
+  return (
+    <footer className="gov-footer">
+      <div className="gov-footer-in">
+        <div className="gf-col">
+          <h4>Karnataka State Police</h4>
+          <p className="gf-text">
+            Crime Analytics &amp; Intelligence Platform — a decision-support tool
+            for data-driven policing across Karnataka districts.
+          </p>
+          <p className="gf-text gf-warn">
+            ⚠ Person-level offender &amp; network data shown here is synthetic
+            (no open person-level crime data exists) and anchored to real district
+            crime volumes. District crime figures are real (NCRB).
+          </p>
+        </div>
+        <div className="gf-col">
+          <h4>Website Policies</h4>
+          <ul className="gf-links">
+            <li><a href="#">Copyright Policy</a></li>
+            <li><a href="#">Hyperlinking Policy</a></li>
+            <li><a href="#">Terms &amp; Conditions</a></li>
+            <li><a href="#">Privacy Policy</a></li>
+            <li><a href="#">Accessibility Statement</a></li>
+          </ul>
+        </div>
+        <div className="gf-col">
+          <h4>Related Links</h4>
+          <ul className="gf-links">
+            <li><a href="https://karnataka.gov.in" target="_blank" rel="noreferrer">Government of Karnataka</a></li>
+            <li><a href="https://ksp.karnataka.gov.in" target="_blank" rel="noreferrer">Karnataka State Police</a></li>
+            <li><a href="https://ncrb.gov.in" target="_blank" rel="noreferrer">NCRB</a></li>
+            <li><a href="https://www.india.gov.in" target="_blank" rel="noreferrer">India.gov.in</a></li>
+            <li><a href="https://www.digitalindia.gov.in" target="_blank" rel="noreferrer">Digital India</a></li>
+          </ul>
+        </div>
+        <div className="gf-col">
+          <h4>Help &amp; Emergency</h4>
+          <ul className="gf-links">
+            <li>Police Control Room: <b>100</b></li>
+            <li>Emergency Response: <b>112</b></li>
+            <li>Women Helpline: <b>1091</b></li>
+            <li>Cyber Crime: <b>1930</b></li>
+          </ul>
+        </div>
+      </div>
+      <div className="gov-footer-bar">
+        <span>
+          © {new Date().getFullYear()} Karnataka State Police, Government of Karnataka.
+          Content owned and maintained by Karnataka State Police.
+        </span>
+        <span>Best viewed in modern browsers · Built for the AI-Driven Crime Analytics pilot</span>
+      </div>
+    </footer>
   );
 }
 

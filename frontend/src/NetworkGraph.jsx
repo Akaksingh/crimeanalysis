@@ -7,16 +7,65 @@ const PALETTE = [
   '#e50914', '#ff6a70', '#f5b301', '#4f9dff', '#7c5cff',
   '#1ec98b', '#ff8a3d', '#d36bff', '#36c5d8', '#c0c0c0',
 ];
-const colorFor = (component) => PALETTE[component % PALETTE.length];
+const colorFor = (component) =>
+  component == null ? '#6b6b6b' : PALETTE[component % PALETTE.length];
 
-// Interactive 3D co-offending network — drag to rotate 360°, scroll to zoom,
-// drag a node to reposition, click a node to inspect. Opens in a modal overlay.
-export default function NetworkGraph({ graph, summary, onClose }) {
+// In the "cases" (bipartite) view we use just two colors so the two kinds of
+// dot are unmistakable: red = a person, amber = a case.
+const PERSON_COLOR = '#e50914';
+const CASE_COLOR = '#f5b301';
+
+const idOf = (end) => (end && end.id != null ? end.id : end);
+
+// Everything connected to one person ("ego network"), so a name search can
+// drop the view to just that individual's world.
+//   • partnerships: the person + their direct co-offenders + links among them.
+//   • cases:        the person + every case they're in + the other people in
+//                   those cases (their co-offenders), so you see the full reach.
+function egoNetwork(base, mode, pid) {
+  if (mode === 'people') {
+    const keep = new Set([pid]);
+    base.links.forEach((l) => {
+      const s = idOf(l.source), t = idOf(l.target);
+      if (s === pid) keep.add(t);
+      if (t === pid) keep.add(s);
+    });
+    return {
+      nodes: base.nodes.filter((n) => keep.has(n.id)),
+      links: base.links.filter((l) => keep.has(idOf(l.source)) && keep.has(idOf(l.target))),
+    };
+  }
+  const caseIds = new Set();
+  base.links.forEach((l) => { if (idOf(l.source) === pid) caseIds.add(idOf(l.target)); });
+  const peopleIds = new Set([pid]);
+  base.links.forEach((l) => { if (caseIds.has(idOf(l.target))) peopleIds.add(idOf(l.source)); });
+  return {
+    nodes: base.nodes.filter(
+      (n) => (n.kind === 'case' ? caseIds.has(n.id) : peopleIds.has(n.id)),
+    ),
+    links: base.links.filter(
+      (l) => caseIds.has(idOf(l.target)) && peopleIds.has(idOf(l.source)),
+    ),
+  };
+}
+
+// Interactive 3D network — drag to rotate 360°, scroll to zoom, drag a node to
+// reposition, click a node to inspect. Two views:
+//   • "partnerships" — person<->person, a line = they shared a case (co-offending)
+//   • "cases"        — person<->case,  a line = this person was in this case,
+//                       so one person branching to many cases = a repeat offender.
+export default function NetworkGraph({ graph, caseGraph, summary, onClose }) {
   const fgRef = useRef();
   const boxRef = useRef();
   const [dims, setDims] = useState({ w: 800, h: 520 });
   const [selected, setSelected] = useState(null);
   const [focusLargest, setFocusLargest] = useState(false);
+  const [showLegend, setShowLegend] = useState(true);
+  const [mode, setMode] = useState('people'); // 'people' | 'cases'
+  const [query, setQuery] = useState('');
+  const [focusPerson, setFocusPerson] = useState(null); // pinned person node
+
+  const hasCases = !!(caseGraph && caseGraph.nodes && caseGraph.nodes.length);
 
   // size the canvas to its container
   useEffect(() => {
@@ -37,14 +86,73 @@ export default function NetworkGraph({ graph, summary, onClose }) {
   }, [onClose]);
 
   const data = useMemo(() => {
-    if (!focusLargest) return graph;
-    const nodes = graph.nodes.filter((n) => n.component === 0); // 0 = largest
-    const ids = new Set(nodes.map((n) => n.id));
-    const links = graph.links.filter(
-      (l) => ids.has(l.source.id ?? l.source) && ids.has(l.target.id ?? l.target),
-    );
-    return { nodes, links };
-  }, [graph, focusLargest]);
+    const base = mode === 'cases' ? caseGraph : graph;
+    if (!base) return { nodes: [], links: [] };
+    if (focusPerson) return egoNetwork(base, mode, focusPerson.id);
+    if (!focusLargest) return base;
+
+    if (mode === 'people') {
+      const nodes = base.nodes.filter((n) => n.component === 0); // 0 = largest
+      const ids = new Set(nodes.map((n) => n.id));
+      const links = base.links.filter(
+        (l) => ids.has(idOf(l.source)) && ids.has(idOf(l.target)),
+      );
+      return { nodes, links };
+    }
+    // cases view: keep the biggest crew's people + the cases they appear in
+    const people = base.nodes.filter((n) => n.kind === 'person' && n.component === 0);
+    const pids = new Set(people.map((n) => n.id));
+    const links = base.links.filter((l) => pids.has(idOf(l.source)));
+    const cids = new Set(links.map((l) => idOf(l.target)));
+    const cases = base.nodes.filter((n) => n.kind === 'case' && cids.has(n.id));
+    return { nodes: [...people, ...cases], links };
+  }, [graph, caseGraph, mode, focusLargest, focusPerson]);
+
+  // searchable person list for the current view
+  const persons = useMemo(() => {
+    const base = mode === 'cases' ? caseGraph : graph;
+    return base ? base.nodes.filter((n) => n.kind !== 'case') : [];
+  }, [graph, caseGraph, mode]);
+
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return persons
+      .filter((p) => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q))
+      .sort((a, b) => (b.incidents || 0) - (a.incidents || 0))
+      .slice(0, 8);
+  }, [persons, query]);
+
+  // when a person is pinned, frame the small ego graph once it has laid out
+  useEffect(() => {
+    if (!focusPerson || !fgRef.current) return;
+    const t = setTimeout(() => fgRef.current && fgRef.current.zoomToFit(700, 60), 700);
+    return () => clearTimeout(t);
+  }, [focusPerson, mode]);
+
+  const pickPerson = (p) => {
+    setFocusPerson(p);
+    setFocusLargest(false);
+    setSelected(p);
+    setQuery('');
+  };
+
+  const clearFocus = () => { setFocusPerson(null); setSelected(null); };
+
+  const personCount = useMemo(
+    () => data.nodes.filter((n) => n.kind !== 'case').length,
+    [data],
+  );
+  const caseCount = useMemo(
+    () => data.nodes.filter((n) => n.kind === 'case').length,
+    [data],
+  );
+
+  const switchMode = (next) => {
+    setMode(next);
+    setSelected(focusPerson || null);
+    setFocusLargest(false);
+  };
 
   const focusNode = (node) => {
     setSelected(node);
@@ -59,23 +167,60 @@ export default function NetworkGraph({ graph, summary, onClose }) {
     );
   };
 
+  const isCaseMode = mode === 'cases';
+
   return (
     <div className="graph-modal" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="graph-dialog">
         <div className="graph-head">
           <div>
-            <h2>Co-offending Network Graph</h2>
+            <h2>{isCaseMode ? 'Who appears across multiple cases' : 'Who committed crimes together'}</h2>
             <div className="muted small">
-              {data.nodes.length} offenders · {data.links.length} co-offence links ·
-              {' '}{summary.components} clusters — drag to rotate · scroll to zoom · click a node
+              {isCaseMode ? (
+                <>
+                  Red dots are people, amber dots are cases; a line means
+                  {' '}<b>this person was in this case</b>. A person joined to several amber
+                  {' '}dots is a <b>repeat offender</b>.{' '}
+                  {personCount} people · {caseCount} cases
+                </>
+              ) : (
+                <>
+                  Each dot is a person; a line means they were in the <b>same case together</b>.
+                  {' '}{personCount} people · {data.links.length} partnerships ·
+                  {' '}{summary.components} crews
+                </>
+              )}
+              {' '}— drag to rotate · scroll to zoom · click a dot
             </div>
           </div>
           <div className="graph-actions">
+            {hasCases && (
+              <div className="graph-toggle">
+                <button
+                  className={!isCaseMode ? 'on' : ''}
+                  onClick={() => switchMode('people')}
+                >
+                  Partnerships
+                </button>
+                <button
+                  className={isCaseMode ? 'on' : ''}
+                  onClick={() => switchMode('cases')}
+                >
+                  Cases
+                </button>
+              </div>
+            )}
+            <button
+              className={showLegend ? 'on' : ''}
+              onClick={() => setShowLegend((v) => !v)}
+            >
+              {showLegend ? 'Hide guide' : 'How to read this'}
+            </button>
             <button
               className={focusLargest ? 'on' : ''}
               onClick={() => { setFocusLargest((v) => !v); setSelected(null); }}
             >
-              {focusLargest ? 'Show all clusters' : 'Focus largest cluster'}
+              {focusLargest ? 'Show all crews' : 'Focus biggest crew'}
             </button>
             <button className="graph-close" onClick={onClose} aria-label="Close">✕</button>
           </div>
@@ -90,36 +235,171 @@ export default function NetworkGraph({ graph, summary, onClose }) {
             backgroundColor="#0b0b0b"
             showNavInfo={false}
             nodeRelSize={4}
-            nodeVal={(n) => 1 + n.degree}
-            nodeColor={(n) => (selected && n.id === selected.id ? '#ffffff' : colorFor(n.component))}
+            nodeVal={(n) =>
+              isCaseMode
+                ? (n.kind === 'case' ? 2 + (n.size || 1) * 1.6 : 1 + (n.incidents || 0))
+                : 1 + n.degree}
+            nodeColor={(n) => {
+              if (selected && n.id === selected.id) return '#ffffff';
+              if (isCaseMode) return n.kind === 'case' ? CASE_COLOR : PERSON_COLOR;
+              return colorFor(n.component);
+            }}
             nodeOpacity={0.92}
-            nodeLabel={(n) =>
-              `<div style="font:600 12px Inter,sans-serif;color:#fff;background:#181818;
+            nodeLabel={(n) => {
+              if (isCaseMode && n.kind === 'case') {
+                return `<div style="font:600 12px Inter,sans-serif;color:#fff;background:#181818;
+                   border:1px solid #383838;border-radius:6px;padding:6px 9px">
+                   <span style="color:#f5b301">Case</span> &middot; ${n.district ?? '—'} &middot; ${n.year ?? ''}<br/>
+                   ${(n.category || '').replace(/_/g, ' ')} &middot;
+                   <span style="color:#ff6a70">${n.size} ${n.size === 1 ? 'person' : 'people'} involved</span></div>`;
+              }
+              const cases = `across ${n.incidents} ${n.incidents === 1 ? 'case' : 'cases'}`;
+              const partners = `worked with ${n.degree} ${n.degree === 1 ? 'person' : 'people'}`;
+              return `<div style="font:600 12px Inter,sans-serif;color:#fff;background:#181818;
                  border:1px solid #383838;border-radius:6px;padding:6px 9px">
                  ${n.name} &middot; <span style="color:#8c8c8c">${n.district ?? '—'}</span><br/>
-                 <span style="color:#ff6a70">${n.degree} co-offenders</span> &middot;
-                 ${n.incidents} cases</div>`}
-            linkColor={() => 'rgba(229,9,20,0.45)'}
+                 <span style="color:#ff6a70">${isCaseMode ? cases : partners}</span> &middot;
+                 ${isCaseMode ? partners : cases}</div>`;
+            }}
+            linkColor={() => (isCaseMode ? 'rgba(245,179,1,0.35)' : 'rgba(229,9,20,0.45)')}
             linkOpacity={0.5}
-            linkWidth={(l) => 0.4 + (l.weight || 1) * 0.5}
+            linkWidth={(l) => (isCaseMode ? 0.5 : 0.4 + (l.weight || 1) * 0.5)}
             linkDirectionalParticles={1}
             linkDirectionalParticleWidth={1.6}
-            linkDirectionalParticleColor={() => '#ff6a70'}
+            linkDirectionalParticleColor={() => (isCaseMode ? '#f5d272' : '#ff6a70')}
             onNodeClick={focusNode}
             onBackgroundClick={() => setSelected(null)}
           />
 
+          <div className="graph-search">
+            <div className="gs-box">
+              <span className="gs-icon">🔍</span>
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search a person by name…"
+                aria-label="Search a person by name"
+              />
+              {query && (
+                <button className="gs-clear" onClick={() => setQuery('')} aria-label="Clear search">✕</button>
+              )}
+            </div>
+            {matches.length > 0 && (
+              <ul className="gs-results">
+                {matches.map((p) => (
+                  <li key={p.id}>
+                    <button onClick={() => pickPerson(p)}>
+                      <b>{p.name}</b>
+                      <span className="muted small">
+                        {p.district ?? '—'} · {p.incidents} {p.incidents === 1 ? 'case' : 'cases'}
+                        {' · '}{p.degree} {p.degree === 1 ? 'partner' : 'partners'}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {query.trim() && matches.length === 0 && (
+              <div className="gs-empty muted small">No person matches “{query.trim()}”.</div>
+            )}
+            {focusPerson && (
+              <div className="gs-focus">
+                <span>Showing <b>{focusPerson.name}</b>’s {isCaseMode ? 'cases & co-offenders' : 'co-offenders'}</span>
+                <button onClick={clearFocus}>Show everyone</button>
+              </div>
+            )}
+          </div>
+
+          {showLegend && (
+            <div className="graph-legend">
+              <div className="gl-title">
+                {isCaseMode ? 'People & their cases' : 'How to read this graph'}
+              </div>
+              {isCaseMode ? (
+                <>
+                  <div className="gl-item">
+                    <span className="gl-dot" />
+                    <span><b>Red dot</b> = a person (offender).</span>
+                  </div>
+                  <div className="gl-item">
+                    <span className="gl-dot gl-dot-case" />
+                    <span><b>Amber dot</b> = one case (a single crime).</span>
+                  </div>
+                  <div className="gl-item">
+                    <span className="gl-line gl-line-case" />
+                    <span><b>A line</b> = this person <b>was in this case</b>.</span>
+                  </div>
+                  <div className="gl-item">
+                    <span className="gl-dot gl-dot-big" />
+                    <span><b>Bigger red dot</b> = person in <b>more cases</b> (repeat offender).</span>
+                  </div>
+                  <div className="gl-item">
+                    <span className="gl-dot gl-dot-case gl-dot-big" />
+                    <span><b>Bigger amber dot</b> = <b>more people</b> in that case.</span>
+                  </div>
+                  <div className="gl-note">
+                    One red dot joined to several amber dots = the <b>same person</b> across
+                    several crimes — matched by their personal ID, not their name.
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="gl-item">
+                    <span className="gl-dot" />
+                    <span><b>A dot</b> = one person (an offender).</span>
+                  </div>
+                  <div className="gl-item">
+                    <span className="gl-line" />
+                    <span><b>A line</b> = these two people were in the <b>same crime together</b>.</span>
+                  </div>
+                  <div className="gl-item">
+                    <span className="gl-line gl-line-thick" />
+                    <span><b>Thicker line</b> = they shared <b>more cases</b> together.</span>
+                  </div>
+                  <div className="gl-item">
+                    <span className="gl-dot gl-dot-big" />
+                    <span><b>Bigger dot</b> = worked with <b>more people</b>.</span>
+                  </div>
+                  <div className="gl-item">
+                    <span className="gl-swatch" />
+                    <span><b>Same color</b> = the same <b>crew</b> (a connected group).</span>
+                  </div>
+                  <div className="gl-note">
+                    Want to see one person's repeat crimes? Switch to <b>Cases</b> at the top.
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {selected && (
             <div className="graph-detail">
               <button className="graph-close" onClick={() => setSelected(null)} aria-label="Close details">✕</button>
-              <div className="gd-name">{selected.name}</div>
-              <div className="gd-row"><span>District</span><b>{selected.district ?? '—'}</b></div>
-              <div className="gd-row"><span>Co-offenders</span><b>{selected.degree}</b></div>
-              <div className="gd-row"><span>Cases</span><b>{selected.incidents}</b></div>
-              <div className="gd-row"><span>Cluster</span><b>#{selected.component}</b></div>
-              <div className="muted small" style={{ marginTop: 8 }}>
-                Synthetic entity · ID {selected.id}
-              </div>
+              {selected.kind === 'case' ? (
+                <>
+                  <div className="gd-name">Case</div>
+                  <div className="gd-row"><span>District</span><b>{selected.district ?? '—'}</b></div>
+                  <div className="gd-row"><span>Year</span><b>{selected.year ?? '—'}</b></div>
+                  <div className="gd-row"><span>Type</span><b>{(selected.category || '—').replace(/_/g, ' ')}</b></div>
+                  <div className="gd-row"><span title="How many people were involved in this single case">People involved</span><b>{selected.size}</b></div>
+                  <div className="muted small" style={{ marginTop: 8 }}>
+                    Synthetic case · ID {selected.id}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="gd-name">{selected.name}</div>
+                  <div className="gd-row"><span>District</span><b>{selected.district ?? '—'}</b></div>
+                  <div className="gd-row"><span title="How many different people this person committed crimes with">Partners</span><b>{selected.degree}</b></div>
+                  <div className="gd-row"><span title="Total cases this person was involved in (their own offence count)">Cases involved in</span><b>{selected.incidents}</b></div>
+                  {!isCaseMode && (
+                    <div className="gd-row"><span title="The crew / connected group this person belongs to">Crew</span><b>#{selected.component}</b></div>
+                  )}
+                  <div className="muted small" style={{ marginTop: 8 }}>
+                    Synthetic entity · ID {selected.id}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

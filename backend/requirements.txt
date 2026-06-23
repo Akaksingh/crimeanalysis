@@ -6,6 +6,10 @@ pandas==2.2.3
 numpy==2.1.2
 scikit-learn==1.8.0
 pydantic>=2.0
+scipy>=1.13
+
+# Phase 6 — Advanced AI/ML pattern detection (PCA, RF, SHAP, IsolationForest, Forecast)
+shap>=0.46
 
 # Phase 2+ (geospatial maps, seasonal/anomaly stats) — install when those phases start:
 # geopandas

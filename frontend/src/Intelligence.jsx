@@ -93,7 +93,7 @@ export default function Intelligence() {
 
       {showGraph && network.graph && (
         <Suspense fallback={<div className="graph-modal"><div className="hint">Loading 3D graph…</div></div>}>
-          <NetworkGraph graph={network.graph} summary={network.summary} onClose={() => setShowGraph(false)} />
+          <NetworkGraph graph={network.graph} caseGraph={network.case_graph} summary={network.summary} onClose={() => setShowGraph(false)} />
         </Suspense>
       )}
     </div>

@@ -64,12 +64,13 @@ def api_root():
     # API index. "/" is left for the served frontend (StaticFiles mount below).
     return {
         "service": "AI-Driven Crime Analytics API",
-        "version": "0.5.0",
+        "version": "0.6.0",
         "endpoints": [
             "/health", "/api/meta", "/api/districts", "/api/districts/{geo_unit_id}",
             "/api/hotspots", "/api/trends", "/api/kpi-catalog", "/api/categories",
             "/api/whoami", "/api/intelligence/repeat-offenders", "/api/intelligence/network",
-            "/api/intelligence/patterns", "/api/socioeconomic", "/api/socioeconomic/correlations",
+            "/api/intelligence/patterns", "/api/intelligence/ml-insights",
+            "/api/socioeconomic", "/api/socioeconomic/correlations",
             "/api/socioeconomic/schema",
         ],
         "docs": "/docs",
@@ -149,6 +150,17 @@ def network(_=Depends(analyst_required)):
 def patterns():
     """AI/ML pattern detection on REAL data: district clusters + anomalies (no PII; open)."""
     return _load("intel_patterns.json")
+
+
+@app.get("/api/intelligence/ml-insights")
+def ml_insights():
+    """Advanced AI/ML insights (Phase 6, open): PCA + KMeans (socio-crime clusters),
+    RandomForest feature importance, SHAP per-district explainability, Isolation Forest
+    multi-dimensional anomaly detection, OLS district forecasts, and composite hotspot
+    probability scores — all integrating NCRB crime data with Census 2011 socio-economic
+    indicators. No PII; open endpoint.
+    """
+    return _load("ml_insights.json")
 
 
 # ---- Phase 4: socio-economic correlation (real Census 2011) ----
