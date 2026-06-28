@@ -49,16 +49,6 @@ def _load(name: str):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _load(name: str):
-    path: Path = paths.API_DIR / name
-    if not path.exists():
-        raise HTTPException(
-            status_code=503,
-            detail=f"{name} not built. Run `python -m pipeline.run` first.",
-        )
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
 @app.get("/api")
 def api_root():
     # API index. "/" is left for the served frontend (StaticFiles mount below).
@@ -72,6 +62,8 @@ def api_root():
             "/api/intelligence/patterns", "/api/intelligence/ml-insights",
             "/api/socioeconomic", "/api/socioeconomic/correlations",
             "/api/socioeconomic/schema",
+            "/api/fir/overview", "/api/fir/stations", "/api/fir/spatiotemporal",
+            "/api/fir/network", "/api/fir/offenders", "/api/fir/cases", "/api/fir/schema",
         ],
         "docs": "/docs",
     }
@@ -161,6 +153,51 @@ def ml_insights():
     indicators. No PII; open endpoint.
     """
     return _load("ml_insights.json")
+
+
+# ---- Phase 7: FIR-record intelligence (KSP Police FIR System schema) ----
+# Schema-shaped synthetic FIR records → record-level analytics the open NCRB
+# aggregates cannot provide. Person-level views are gated to analyst+ when auth is on.
+@app.get("/api/fir/overview")
+def fir_overview():
+    """Case lifecycle, gravity, detection (chargesheet A/B/C) and demographics."""
+    return _load("fir_overview.json")
+
+
+@app.get("/api/fir/stations")
+def fir_stations():
+    """Police-station drill-down: cases, heinous share and detection rate per station."""
+    return _load("fir_stations.json")
+
+
+@app.get("/api/fir/spatiotemporal")
+def fir_spatiotemporal():
+    """Spatiotemporal hotspots: GPS points + time-of-day histograms + grid hotspots."""
+    return _load("fir_spatiotemporal.json")
+
+
+@app.get("/api/fir/network")
+def fir_network(_=Depends(analyst_required)):
+    """REAL co-accused network + person↔case graph. Requires analyst role when auth enabled."""
+    return _load("fir_network.json")
+
+
+@app.get("/api/fir/offenders")
+def fir_offenders(_=Depends(analyst_required)):
+    """Repeat-offender profiles with Modus Operandi. Requires analyst role when auth enabled."""
+    return _load("fir_offenders.json")
+
+
+@app.get("/api/fir/cases")
+def fir_cases():
+    """Sample raw FIR rows (CaseMaster + classification) for the case table."""
+    return _load("fir_cases.json")
+
+
+@app.get("/api/fir/schema")
+def fir_schema():
+    """The KSP Police FIR System ER model (tables, keys, relationships)."""
+    return _load("fir_schema.json")
 
 
 # ---- Phase 4: socio-economic correlation (real Census 2011) ----

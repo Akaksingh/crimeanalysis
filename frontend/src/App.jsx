@@ -3,6 +3,7 @@ import { api } from './api.js';
 import CrimeMap from './CrimeMap.jsx';
 import Intelligence from './Intelligence.jsx';
 import Correlations from './Correlations.jsx';
+import FIRIntelligence from './FIRIntelligence.jsx';
 import {
   AboutPage, CrimePage, WomenChildrenPage, PoliceUnitsPage, FAQPage, ContactPage,
 } from './Pages.jsx';
@@ -241,6 +242,7 @@ const CRIME_TABS = [
   { id: 'overview', label: 'Map & Districts' },
   { id: 'intelligence', label: 'Crime Intelligence' },
   { id: 'correlations', label: 'Socio-economic' },
+  { id: 'fir', label: 'FIR Intelligence' },
 ];
 
 function CrimeDashboard({ meta }) {
@@ -300,6 +302,8 @@ function CrimeDashboard({ meta }) {
         <Intelligence />
       ) : tab === 'correlations' ? (
         <Correlations />
+      ) : tab === 'fir' ? (
+        <FIRIntelligence />
       ) : (
         <>
           {districts.length > 0 && (

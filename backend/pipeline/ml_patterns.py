@@ -21,7 +21,10 @@ import json
 
 import numpy as np
 import pandas as pd
-import shap
+try:                                   # SHAP is an optional heavy dependency;
+    import shap                        # the pipeline degrades to a dependency-free
+except ImportError:                    # local explanation when it is not installed.
+    shap = None
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.ensemble import IsolationForest, RandomForestRegressor
@@ -240,9 +243,19 @@ def _run_rf_shap(
         reverse=True,
     )
 
-    # SHAP explanations via TreeExplainer (no kernel approximation needed for RF)
-    explainer = shap.TreeExplainer(rf, feature_perturbation="tree_path_dependent")
-    shap_values = explainer.shap_values(X)
+    # Per-district explanation. Preferred: SHAP TreeExplainer (exact for RF).
+    # Fallback (shap not installed): importance-weighted standardized deviation —
+    # a deterministic local proxy so the pipeline still runs and ranks drivers.
+    if shap is not None:
+        explainer = shap.TreeExplainer(rf, feature_perturbation="tree_path_dependent")
+        shap_values = explainer.shap_values(X)
+        explainer_kind = "shap_tree"
+    else:
+        mu = X.mean(axis=0)
+        sd = X.std(axis=0)
+        sd[sd == 0] = 1.0
+        shap_values = ((X - mu) / sd) * importances   # local contribution proxy
+        explainer_kind = "importance_proxy"
 
     shap_insights = []
     for i, gid in enumerate(joined.index):
@@ -271,6 +284,7 @@ def _run_rf_shap(
         "oob_r2": oob_r2,
         "train_r2": train_r2,
         "feature_importance": feature_importance,
+        "explainer": explainer_kind,
     }, shap_insights
 
 

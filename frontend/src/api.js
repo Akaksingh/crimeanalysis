@@ -20,4 +20,12 @@ export const api = {
   intelPatterns: () => get('/api/intelligence/patterns'),
   seIndicators: () => get('/api/socioeconomic'),
   seCorrelations: () => get('/api/socioeconomic/correlations'),
+  // Phase 7 — FIR-record intelligence (KSP Police FIR System schema)
+  firOverview: () => get('/api/fir/overview'),
+  firStations: () => get('/api/fir/stations'),
+  firSpatiotemporal: () => get('/api/fir/spatiotemporal'),
+  firNetwork: () => get('/api/fir/network'),
+  firOffenders: () => get('/api/fir/offenders'),
+  firCases: () => get('/api/fir/cases'),
+  firSchema: () => get('/api/fir/schema'),
 };

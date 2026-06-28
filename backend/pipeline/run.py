@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import sys
 
-from . import build_kpis, data_quality, ingest, intelligence, ml_patterns, paths, socioeconomic
+from . import build_kpis, data_quality, fir_intel, ingest, intelligence, ml_patterns, paths, socioeconomic
 
 
 def main() -> int:
@@ -65,6 +65,14 @@ def main() -> int:
         f"{ml['forecasts_generated']} district forecasts"
     )
     print(f"                   PCA variance explained: {ml['pca_variance_explained']:.0%}")
+
+    fir = fir_intel.run()
+    print(
+        f"[7/7] fir intel  : {fir['cases']} FIR records across {fir['stations']} stations; "
+        f"{fir['accused']} accused ({fir['repeat']} repeat); "
+        f"co-accused network {fir['network_nodes']}n/{fir['network_edges']}e "
+        f"in {fir['components']} crews; detection rate {fir['detection_rate']:.0%}"
+    )
 
     print("-" * 64)
     print(f"outputs -> {paths.PROCESSED_DIR}")
