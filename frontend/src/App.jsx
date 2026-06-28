@@ -3,38 +3,293 @@ import { api } from './api.js';
 import CrimeMap from './CrimeMap.jsx';
 import Intelligence from './Intelligence.jsx';
 import Correlations from './Correlations.jsx';
+import {
+  AboutPage, CrimePage, WomenChildrenPage, PoliceUnitsPage, FAQPage, ContactPage,
+} from './Pages.jsx';
 
 const BAND_COLOR = { Low: '#1ea672', Medium: '#d8a300', High: '#e8730c', Critical: '#d23b3b' };
 const STATUS_LABEL = { none: '—', emerging: 'Emerging', established: 'Hotspot' };
 
+// Primary navigation — mirrors the official KSP portal's menu.
+const NAV = [
+  { id: 'home', label: 'Home' },
+  { id: 'about', label: 'About Us' },
+  { id: 'crime', label: 'Crime' },
+  { id: 'women-children', label: 'Women & Children' },
+  { id: 'police-units', label: 'Police Units & Special Units' },
+  { id: 'faq', label: 'FAQ' },
+  { id: 'contact', label: 'Contact Us' },
+];
+
+const ROUTE_IDS = NAV.map((n) => n.id);
+
+function currentRoute() {
+  const h = window.location.hash.replace(/^#\/?/, '');
+  return ROUTE_IDS.includes(h) ? h : 'home';
+}
+
 export default function App() {
   const [meta, setMeta] = useState(null);
+  const [route, setRoute] = useState(currentRoute());
+
+  useEffect(() => {
+    api.meta().then(setMeta).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const onHash = () => { setRoute(currentRoute()); window.scrollTo(0, 0); };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  const go = (id) => { window.location.hash = `/${id}`; };
+
+  return (
+    <Shell meta={meta} route={route} go={go}>
+      {route === 'home' && <CrimeDashboard meta={meta} />}
+      {route === 'about' && <AboutPage />}
+      {route === 'crime' && <CrimePage />}
+      {route === 'women-children' && <WomenChildrenPage />}
+      {route === 'police-units' && <PoliceUnitsPage />}
+      {route === 'faq' && <FAQPage />}
+      {route === 'contact' && <ContactPage />}
+    </Shell>
+  );
+}
+
+// ===========================================================
+// Karnataka State Police chrome, reproducing the official portal's
+// three-row masthead: a teal→purple utility bar, a white masthead with
+// the Chief Minister & Home Minister banners flanking the state emblem
+// and bilingual title, and a blue→purple primary navigation bar.
+// ===========================================================
+function Shell({ meta, route, go, children }) {
+  const active = NAV.find((n) => n.id === route)?.label ?? '';
+
+  // Font Size controls — scale the root font size (rem-based layout follows).
+  const setFont = (delta) => {
+    const html = document.documentElement;
+    const cur = parseFloat(html.style.fontSize) || 16;
+    const next = delta === 0 ? 16 : Math.min(22, Math.max(12, cur + delta));
+    html.style.fontSize = `${next}px`;
+  };
+
+  return (
+    <>
+      <a className="skip-link" href="#main">Skip to main content</a>
+
+      {/* Row 1 — top utility bar (KSP teal→purple gradient) */}
+      <div className="ksp-topbar">
+        <div className="ksp-topbar-in">
+          <div className="ktb-left">
+            <a href="#" className="ktb-item" lang="kn">ಕನ್ನಡ</a>
+            <a href="https://ksp.karnataka.gov.in/" target="_blank" rel="noreferrer" className="ktb-item ktb-hide-sm">Official Website of GoK</a>
+          </div>
+          <div className="ktb-right">
+            <span className="ktb-font">
+              Font Size
+              <button type="button" aria-label="Increase font size" onClick={() => setFont(1)}>+</button>
+              <button type="button" aria-label="Reset font size" onClick={() => setFont(0)}>A</button>
+              <button type="button" aria-label="Decrease font size" onClick={() => setFont(-1)}>−</button>
+            </span>
+            <SocialBar />
+            <span className="ktb-emergency">Emergency Number : <b>112</b></span>
+          </div>
+        </div>
+      </div>
+
+      {/* Row 2 — masthead: state emblem + bilingual title */}
+      <header className="ksp-masthead">
+        <div className="ksp-masthead-in">
+          <a
+            className="ksp-brand"
+            href="#/home"
+            onClick={(e) => { e.preventDefault(); go('home'); }}
+          >
+            <img className="ksp-emblem" src="/ksp-main-logo.png" alt="Karnataka State Emblem" />
+            <span className="ksp-brand-text">
+              <b>Karnataka State Police</b>
+              <span className="ksp-brand-kn" lang="kn">ಕರ್ನಾಟಕ ರಾಜ್ಯ ಪೊಲೀಸ್</span>
+            </span>
+          </a>
+        </div>
+      </header>
+
+      {/* Row 3 — primary navigation (KSP blue→purple gradient) */}
+      <nav className="ksp-nav" aria-label="Primary">
+        <div className="ksp-nav-in">
+          {NAV.map((n) => (
+            <button
+              key={n.id}
+              className={route === n.id ? 'on' : ''}
+              onClick={() => go(n.id)}
+              aria-current={route === n.id ? 'page' : undefined}
+            >
+              {n.label}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      <div className="gov-context">
+        <div className="gov-context-in">
+          <span className="crumb">
+            <a href="#/home" onClick={(e) => { e.preventDefault(); go('home'); }}>Home</a>
+            {route !== 'home' && <><span className="crumb-sep">›</span> {active}</>}
+          </span>
+          {meta && (
+            <span className="ctx-meta">
+              {meta.district_count} districts · {meta.years[0]}–{meta.years[meta.years.length - 1]} ·
+              latest {meta.latest_year}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <main id="main" className="wrap">{children}</main>
+
+      <GovFooter />
+    </>
+  );
+}
+
+// Social links shown in the KSP top utility bar.
+function SocialBar() {
+  return (
+    <span className="ktb-social">
+      <a href="https://www.youtube.com/@karnatakastatepolice6684" target="_blank" rel="noreferrer" aria-label="YouTube" title="YouTube">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M23 7.5a3 3 0 0 0-2.1-2.1C19 4.9 12 4.9 12 4.9s-7 0-8.9.5A3 3 0 0 0 1 7.5 31 31 0 0 0 .5 12 31 31 0 0 0 1 16.5a3 3 0 0 0 2.1 2.1c1.9.5 8.9.5 8.9.5s7 0 8.9-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 23.5 12 31 31 0 0 0 23 7.5zM9.7 15.4V8.6l5.8 3.4z"/></svg>
+      </a>
+      <a href="https://www.instagram.com/karnatakacops/" target="_blank" rel="noreferrer" aria-label="Instagram" title="Instagram">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M12 2.2c3.2 0 3.6 0 4.9.1 1.2.1 1.8.3 2.2.4.6.2 1 .5 1.4.9.4.4.7.8.9 1.4.2.4.4 1 .4 2.2.1 1.3.1 1.7.1 4.9s0 3.6-.1 4.9c-.1 1.2-.3 1.8-.4 2.2-.2.6-.5 1-.9 1.4-.4.4-.8.7-1.4.9-.4.2-1 .4-2.2.4-1.3.1-1.7.1-4.9.1s-3.6 0-4.9-.1c-1.2-.1-1.8-.3-2.2-.4-.6-.2-1-.5-1.4-.9-.4-.4-.7-.8-.9-1.4-.2-.4-.4-1-.4-2.2C2.2 15.6 2.2 15.2 2.2 12s0-3.6.1-4.9c.1-1.2.3-1.8.4-2.2.2-.6.5-1 .9-1.4.4-.4.8-.7 1.4-.9.4-.2 1-.4 2.2-.4C8.4 2.2 8.8 2.2 12 2.2zm0 3.2A6.6 6.6 0 1 0 18.6 12 6.6 6.6 0 0 0 12 5.4zm0 10.9A4.3 4.3 0 1 1 16.3 12 4.3 4.3 0 0 1 12 16.3zm6.8-11.2a1.5 1.5 0 1 1-1.5-1.5 1.5 1.5 0 0 1 1.5 1.5z"/></svg>
+      </a>
+      <a href="https://www.facebook.com/KarnatakaCops/" target="_blank" rel="noreferrer" aria-label="Facebook" title="Facebook">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M13.5 21v-8h2.7l.4-3.1h-3.1V7.9c0-.9.3-1.5 1.6-1.5h1.7V3.6c-.3 0-1.3-.1-2.5-.1-2.5 0-4.2 1.5-4.2 4.3v2.1H7.3V13h2.5v8z"/></svg>
+      </a>
+      <a href="https://twitter.com/DgpKarnataka" target="_blank" rel="noreferrer" aria-label="Twitter / X" title="Twitter / X">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18.2 2.5h3.3l-7.2 8.2 8.5 11.3h-6.7l-5.2-6.9-6 6.9H1.3l7.7-8.8L.8 2.5h6.8l4.7 6.3zm-1.2 17.8h1.8L7.1 4.3H5.1z"/></svg>
+      </a>
+    </span>
+  );
+}
+
+function GovFooter() {
+  return (
+    <footer className="gov-footer">
+      <div className="gov-footer-in">
+        <div className="gf-col">
+          <h4>Karnataka State Police</h4>
+          <p className="gf-text">
+            Crime Analytics &amp; Intelligence Platform — a decision-support tool
+            for data-driven policing across Karnataka districts.
+          </p>
+          <p className="gf-text gf-warn">
+            ⚠ Person-level offender &amp; network data shown here is synthetic
+            (no open person-level crime data exists) and anchored to real district
+            crime volumes. District crime figures are real (NCRB).
+          </p>
+        </div>
+        <div className="gf-col">
+          <h4>Quick Links</h4>
+          <ul className="gf-links">
+            <li><a href="#/home">Crime Analytics</a></li>
+            <li><a href="#/crime">Crime</a></li>
+            <li><a href="#/about">About Us</a></li>
+            <li><a href="#/women-children">Women &amp; Children</a></li>
+            <li><a href="#/police-units">Police Units &amp; Special Units</a></li>
+            <li><a href="#/faq">FAQ</a></li>
+            <li><a href="#/contact">Contact Us</a></li>
+          </ul>
+        </div>
+        <div className="gf-col">
+          <h4>Related Links</h4>
+          <ul className="gf-links">
+            <li><a href="https://karnataka.gov.in" target="_blank" rel="noreferrer">Government of Karnataka</a></li>
+            <li><a href="https://ksp.karnataka.gov.in" target="_blank" rel="noreferrer">Karnataka State Police</a></li>
+            <li><a href="https://ncrb.gov.in" target="_blank" rel="noreferrer">NCRB</a></li>
+            <li><a href="https://www.india.gov.in" target="_blank" rel="noreferrer">India.gov.in</a></li>
+            <li><a href="https://www.digitalindia.gov.in" target="_blank" rel="noreferrer">Digital India</a></li>
+          </ul>
+        </div>
+        <div className="gf-col">
+          <h4>Help &amp; Emergency</h4>
+          <ul className="gf-links">
+            <li>Police Control Room: <a href="tel:100"><b>100</b></a></li>
+            <li>Emergency Response: <a href="tel:112"><b>112</b></a></li>
+            <li>Women Helpline: <a href="tel:1091"><b>1091</b></a></li>
+            <li>Childline: <a href="tel:1098"><b>1098</b></a></li>
+            <li>Cyber Crime: <a href="tel:1930"><b>1930</b></a></li>
+          </ul>
+        </div>
+      </div>
+      <div className="gov-footer-bar">
+        <span>
+          © {new Date().getFullYear()} Karnataka State Police, Government of Karnataka.
+          Content owned and maintained by Karnataka State Police.
+        </span>
+        <span>Best viewed in modern browsers · Built for the AI-Driven Crime Analytics pilot</span>
+      </div>
+    </footer>
+  );
+}
+
+// ===========================================================
+// Crime page — hosts the live analytics dashboard (map &
+// districts, crime intelligence, socio-economic correlations).
+// ===========================================================
+const CRIME_TABS = [
+  { id: 'overview', label: 'Map & Districts' },
+  { id: 'intelligence', label: 'Crime Intelligence' },
+  { id: 'correlations', label: 'Socio-economic' },
+];
+
+function CrimeDashboard({ meta }) {
+  const [tab, setTab] = useState('overview');
   const [districts, setDistricts] = useState([]);
   const [boundaries, setBoundaries] = useState(null);
   const [selected, setSelected] = useState(null);
-  const [tab, setTab] = useState('overview'); // 'overview' | 'intelligence'
   const [error, setError] = useState(null);
 
   useEffect(() => {
     Promise.all([
-      api.meta(),
       api.districts(),
       fetch('/data/karnataka_districts.geojson').then((r) => (r.ok ? r.json() : null)),
     ])
-      .then(([m, d, b]) => { setMeta(m); setDistricts(d); setBoundaries(b); })
+      .then(([d, b]) => { setDistricts(d); setBoundaries(b); })
       .catch((e) => setError(e.message));
   }, []);
 
   const select = (id) => api.district(id).then(setSelected).catch((e) => setError(e.message));
 
-  const NAV = [
-    { id: 'overview', label: 'Map & Districts' },
-    { id: 'intelligence', label: 'Crime Intelligence' },
-    { id: 'correlations', label: 'Socio-economic' },
-  ];
-
   return (
-    <Shell meta={meta} tab={tab} setTab={setTab} nav={NAV}>
+    <div className="page" id="analytics">
+      <div className="page-head">
+        <h2>Crime Analytics</h2>
+        <div className="page-head-kn" lang="kn">ಅಪರಾಧ ವಿಶ್ಲೇಷಣೆ</div>
+        <p className="page-lead">
+          District-wise crime analytics for Karnataka — interactive maps, risk
+          bands, hotspots, crime intelligence and socio-economic correlations.
+        </p>
+      </div>
+
+      {meta && (
+        <div className="data-note">
+          <b>Data note:</b> {meta.data_note}
+        </div>
+      )}
+
+      <div className="subnav">
+        {CRIME_TABS.map((t) => (
+          <button
+            key={t.id}
+            className={tab === t.id ? 'on' : ''}
+            onClick={() => setTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       {error ? (
         <div className="error">
           Could not reach the API ({error}).<br />
@@ -58,153 +313,7 @@ export default function App() {
           <OverviewCols districts={districts} selected={selected} select={select} />
         </>
       )}
-    </Shell>
-  );
-}
-
-// Government-of-Karnataka / Karnataka State Police chrome: utility bar, tricolor
-// strip, emblem + bilingual title, primary navigation, and an official footer.
-function Shell({ meta, tab, setTab, nav, children }) {
-  const active = nav.find((n) => n.id === tab)?.label ?? '';
-  return (
-    <>
-      <a className="skip-link" href="#main">Skip to main content</a>
-
-      <div className="gov-topbar">
-        <div className="gov-topbar-in">
-          <span className="gov-india">Government of Karnataka · ಕರ್ನಾಟಕ ಸರ್ಕಾರ</span>
-          <div className="gov-top-actions">
-            <button type="button" aria-label="Decrease text size">A-</button>
-            <button type="button" aria-label="Default text size">A</button>
-            <button type="button" aria-label="Increase text size">A+</button>
-            <span className="sep" />
-            <a className="on" href="#" aria-current="true">English</a>
-            <a href="#" lang="kn">ಕನ್ನಡ</a>
-            <span className="sep" />
-            <a href="#">Sign In</a>
-          </div>
-        </div>
-      </div>
-
-      <div className="tricolor" aria-hidden="true" />
-
-      <header className="gov-header">
-        <div className="gov-header-in">
-          <img
-            className="gov-emblem"
-            src="/ksp-logo.svg"
-            alt="Karnataka State Police emblem"
-            width="68"
-            height="68"
-          />
-          <div className="gov-title">
-            <h1>Karnataka State Police</h1>
-            <div className="gov-sub-kn" lang="kn">ಕರ್ನಾಟಕ ರಾಜ್ಯ ಪೊಲೀಸ್</div>
-            <div className="gov-sub-en">Government of Karnataka</div>
-          </div>
-          <div className="gov-portal-badge">
-            <div className="gpb-kicker">Official Portal</div>
-            <div className="gpb-title">Crime Analytics &amp; Intelligence Platform</div>
-            <div className="gpb-sub">Data-driven policing · Pilot: Karnataka</div>
-          </div>
-        </div>
-      </header>
-
-      <nav className="gov-nav" aria-label="Primary">
-        <div className="gov-nav-in">
-          {nav.map((n) => (
-            <button
-              key={n.id}
-              className={tab === n.id ? 'on' : ''}
-              onClick={() => setTab(n.id)}
-              aria-current={tab === n.id ? 'page' : undefined}
-            >
-              {n.label}
-            </button>
-          ))}
-        </div>
-      </nav>
-
-      <div className="gov-context">
-        <div className="gov-context-in">
-          <span className="crumb">Home <span className="crumb-sep">›</span> {active}</span>
-          {meta && (
-            <span className="ctx-meta">
-              {meta.district_count} districts · {meta.years[0]}–{meta.years[meta.years.length - 1]} ·
-              latest {meta.latest_year}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <main id="main" className="wrap">
-        {meta && (
-          <div className="data-note">
-            <b>Data note:</b> {meta.data_note}
-          </div>
-        )}
-        {children}
-      </main>
-
-      <GovFooter />
-    </>
-  );
-}
-
-function GovFooter() {
-  return (
-    <footer className="gov-footer">
-      <div className="gov-footer-in">
-        <div className="gf-col">
-          <h4>Karnataka State Police</h4>
-          <p className="gf-text">
-            Crime Analytics &amp; Intelligence Platform — a decision-support tool
-            for data-driven policing across Karnataka districts.
-          </p>
-          <p className="gf-text gf-warn">
-            ⚠ Person-level offender &amp; network data shown here is synthetic
-            (no open person-level crime data exists) and anchored to real district
-            crime volumes. District crime figures are real (NCRB).
-          </p>
-        </div>
-        <div className="gf-col">
-          <h4>Website Policies</h4>
-          <ul className="gf-links">
-            <li><a href="#">Copyright Policy</a></li>
-            <li><a href="#">Hyperlinking Policy</a></li>
-            <li><a href="#">Terms &amp; Conditions</a></li>
-            <li><a href="#">Privacy Policy</a></li>
-            <li><a href="#">Accessibility Statement</a></li>
-          </ul>
-        </div>
-        <div className="gf-col">
-          <h4>Related Links</h4>
-          <ul className="gf-links">
-            <li><a href="https://karnataka.gov.in" target="_blank" rel="noreferrer">Government of Karnataka</a></li>
-            <li><a href="https://ksp.karnataka.gov.in" target="_blank" rel="noreferrer">Karnataka State Police</a></li>
-            <li><a href="https://ncrb.gov.in" target="_blank" rel="noreferrer">NCRB</a></li>
-            <li><a href="https://www.india.gov.in" target="_blank" rel="noreferrer">India.gov.in</a></li>
-            <li><a href="https://www.digitalindia.gov.in" target="_blank" rel="noreferrer">Digital India</a></li>
-          </ul>
-        </div>
-        <div className="gf-col">
-          <h4>Help &amp; Emergency</h4>
-          <ul className="gf-links">
-            <li>Police Control Room: <b>100</b></li>
-            <li>Emergency Response: <b>112</b></li>
-            <li>Women Helpline: <b>1091</b></li>
-            <li>Cyber Crime: <b>1930</b></li>
-          </ul>
-        </div>
-      </div>
-      <div className="gov-footer-bar">
-        <span>
-          © {new Date().getFullYear()} Karnataka State Police, Government of Karnataka.
-          Content owned and maintained by Karnataka State Police.
-        </span>
-        <span>Best viewed in modern browsers · Built for the AI-Driven Crime Analytics pilot</span>
-      </div>
-    </footer>
+    </div>
   );
 }
 
